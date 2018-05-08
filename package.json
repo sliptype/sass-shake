@@ -2,7 +2,6 @@
   "name": "sass-shake",
   "version": "1.0.0",
   "description": "A command line utility to remove unused sass files",
-  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -24,5 +23,9 @@
     "commander": "^2.15.1",
     "recursive-readdir": "^2.2.2",
     "table": "^4.0.3"
-  }
+  },
+  "bin": {
+    "sass-shake": "./bin/sass-shake.js"
+  },
+  "preferGlobal": true
 }
