@@ -12,7 +12,7 @@ const sassFile = (filename) => `${filename}${detectedFileExtension}`;
 
 const sassPartial = (filename) => `_${sassFile(filename)}`;
 
-const possibleFilenames = (filename) => [sassFile(filename), sassPartial(filename)];
+const possibleFilenames = (filename) => [filename, sassFile(filename), sassPartial(filename)];
 
 const unique = (array) => array.sort().filter((el, i, arr) => arr.indexOf(el) === i);
 
