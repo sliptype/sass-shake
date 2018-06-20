@@ -4,18 +4,37 @@ const recursive = require('recursive-readdir');
 const path = require('path');
 const table = require('table').table;
 
-const fileExtension = '.scss';
+let detectedFileExtension = '.scss';
 
-const sassFile = (filename) => `${filename}${fileExtension}`;
+const validExtensions = ['.scss', '.sass'];
+
+const sassFile = (filename) => `${filename}${detectedFileExtension}`;
 
 const sassPartial = (filename) => `_${sassFile(filename)}`;
 
-const possibleFilenames = (filename) => [filename, sassFile(filename), sassPartial(filename)];
+const possibleFilenames = (filename) => [sassFile(filename), sassPartial(filename)];
 
 const unique = (array) => array.sort().filter((el, i, arr) => arr.indexOf(el) === i);
 
-const findEntryPoints = (path) => fs.readdirSync(path)
-  .filter((filename) => filename.includes('.scss'));
+const findEntryPoints = (path, extension) => fs.readdirSync(path)
+  .filter((filename) => filename.includes(extension))
+
+
+const detectDominantExtension = (path) => {
+  let dominantExtension;
+  let dominantExtensionEntryCount = 0;
+
+  for (let extension of validExtensions) {
+    const count = findEntryPoints(path, extension).length;
+    if (count > dominantExtensionEntryCount) {
+      dominantExtension = extension;
+      dominantExtensionEntryCount = count;
+    };
+  }
+
+  return dominantExtension;
+}
+
 
 const checkIfExcluded = (file, exclusions) => {
   for (let exclusion of exclusions) {
@@ -31,14 +50,18 @@ const checkIfExcluded = (file, exclusions) => {
 
 const traverseSassImportTree = async function (directory, filename, importList, shouldLog) {
   importList = importList || [];
+  let filePath = path.join(directory, filename);
 
   try {
-    let filePath = path.join(directory, filename);
     let contents = fs.readFileSync(filePath).toString();
 
     importList.push(path.normalize(filePath));
 
-    let importRegex = new RegExp('@import\\s+((?:,?\\s*["\'].*["\']\\s*)*)[\\s;]', 'gm');
+
+    let importRegex = (detectedFileExtension === '.scss')
+      ? new RegExp('@import\\s+((?:,?\\s*["\'].*["\']\\s*)*)[\\s;]', 'gm') // scss syntax
+      : new RegExp('^@import\\s+(\\S+)', 'gm'); // sass syntax
+
     let match = importRegex.exec(contents);
 
     while (match !== null) {
@@ -67,7 +90,11 @@ const traverseSassImportTree = async function (directory, filename, importList, 
     }
   } catch (e) {
     if (shouldLog) {
-      console.log(e);
+      if (e.code === 'ENOENT') {
+        console.warn(`Attempted file not found: ${filePath}`);
+      } else {
+        console.log(e);
+      }
     }
   }
 
@@ -79,7 +106,7 @@ const findUnusedFiles = async function (directory, filesInSassTree, exclusions) 
   let filesInDirectory = await recursive(directory);
 
   filesInDirectory.forEach((file) => {
-    if (!checkIfExcluded(file, exclusions) && file.includes(fileExtension) && !filesInSassTree.includes(file)) {
+    if (!checkIfExcluded(file, exclusions) && file.includes(detectedFileExtension) && !filesInSassTree.includes(file)) {
       unusedFiles.push(file);
     }
   });
@@ -145,9 +172,12 @@ const sassShake = async function (options) {
     hideTable: shouldHideTable
   } = options;
 
+  // Detect dominant extension
+  detectedFileExtension = detectDominantExtension(path);
+
   // Entry points
   if (!entryPoints) {
-    entryPoints = findEntryPoints(path);
+    entryPoints = findEntryPoints(path, detectedFileExtension);
   }
 
   if (entryPoints.length) {
@@ -173,7 +203,6 @@ const sassShake = async function (options) {
     }
 
     console.log(`Found ${deletionCandidates.length} unused files in directory tree ${path}`);
-
 
     // Deletion
     if (shouldDeleteFiles) {
