@@ -169,37 +169,23 @@
     "prefer-spread": 0
   },
   "plugins": [
-    "demandware"
+    "standard"
   ],
   "env": {
-    "demandware/globals": true,
+    "node": true,
     "browser": true,
     "es6": true,
     "commonjs": true
   },
-  "globals": {
-    "AddressBook": true,
-    "CustomerAddress": true,
-    "digitalData": true,
-    "dw": true,
-    "empty": true,
-    "HTTPClient": true,
-    "HTTPService": true,
-    "importPackage": true,
-    "importScript": true,
-    "OrderAddress": true,
-    "PIPELET_NEXT": true,
-    "PipelineDictionary": true,
-    "request": true,
-    "response": true,
-    "s": true,
-    "session": true,
-    "Service": true,
-    "ServiceRegistry": true,
-    "Site": true
-  },
+  "parser": "babel-eslint",
   "parserOptions": {
     "sourceType": "module",
-    "ecmaVersion": 2017
+    "ecmaVersion": 2017,
+    "parserOptions": {
+      "ecmaFeatures": {
+         "spread": true,
+        "experimentalObjectRestSpread": true
+      }
+    }
   }
 }
