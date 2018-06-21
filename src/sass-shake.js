@@ -1,21 +1,36 @@
 const fs = require('fs');
-const util = require('util');
 const recursive = require('recursive-readdir');
 const path = require('path');
 const table = require('table').table;
 
-const fileExtension = '.scss';
+const validExtensions = ['.scss', '.sass'];
 
-const sassFile = (filename) => `${filename}${fileExtension}`;
-
-const sassPartial = (filename) => `_${sassFile(filename)}`;
-
-const possibleFilenames = (filename) => [filename, sassFile(filename), sassPartial(filename)];
+const possibleFilenames = (filename, extension) => [
+  filename,
+  `${filename}${extension}`,
+  `_${filename}${extension}`
+];
 
 const unique = (array) => array.sort().filter((el, i, arr) => arr.indexOf(el) === i);
 
-const findEntryPoints = (path) => fs.readdirSync(path)
-  .filter((filename) => filename.includes('.scss'));
+const findEntryPoints = (directoryPath, extension) => fs.readdirSync(directoryPath)
+  .filter((filename) => filename.includes(extension));
+
+const detectDominantExtension = (directoryPath) => {
+  let dominantExtension;
+  let dominantExtensionEntryCount = 0;
+
+  for (let extension of validExtensions) {
+    const count = findEntryPoints(directoryPath, extension).length;
+    if (count > dominantExtensionEntryCount) {
+      dominantExtension = extension;
+      dominantExtensionEntryCount = count;
+    }
+  }
+
+  return dominantExtension;
+};
+
 
 const checkIfExcluded = (file, exclusions) => {
   for (let exclusion of exclusions) {
@@ -29,37 +44,42 @@ const checkIfExcluded = (file, exclusions) => {
   return false;
 };
 
-const traverseSassImportTree = async function (directory, filename, importList, shouldLog) {
-  importList = importList || [];
+const traverseSassImportTree = async function (directory, filename, sassFilesImported, extension, shouldLog) {
+  const importList = sassFilesImported || [];
+
+  let filePath = path.join(directory, filename);
 
   try {
-    let filePath = path.join(directory, filename);
     let contents = fs.readFileSync(filePath).toString();
 
     importList.push(path.normalize(filePath));
 
-    let importRegex = new RegExp('@import\\s+((?:,?\\s*["\'].*["\']\\s*)*)[\\s;]', 'gm');
+
+    let importRegex = (extension === '.scss')
+      ? new RegExp('@import\\s+((?:,?\\s*["\'].*["\']\\s*)*)[\\s;]', 'gm') // scss syntax
+      : new RegExp('^@import\\s+(\\S+)', 'gm'); // sass syntax
+
     let match = importRegex.exec(contents);
 
     while (match !== null) {
 
       let importPathsString = match[1];
-      let importPaths = importPathsString.split(',').map(path => path.replace(/[\s"']/g, ''));
+      let importPaths = importPathsString.split(',').map(p => p.replace(/[\s"']/g, ''));
 
       for (let importPath of importPaths) {
 
         let pathPartsRegex = new RegExp('(.*)\/([^\/]*)$');
         let pathParts = importPath.match(pathPartsRegex);
-        let possibleImportFilenames = possibleFilenames(importPath);
+        let possibleImportFilenames = possibleFilenames(importPath, extension);
         let importDirectory = directory;
 
         if (pathParts) {
           importDirectory = path.join(directory, pathParts[1]);
-          possibleImportFilenames = possibleFilenames(pathParts[2]);
+          possibleImportFilenames = possibleFilenames(pathParts[2], extension);
         }
 
-        for (let filename of possibleImportFilenames) {
-          await traverseSassImportTree(importDirectory, filename, importList, shouldLog);
+        for (let guessedFilename of possibleImportFilenames) {
+          await traverseSassImportTree(importDirectory, guessedFilename, importList, extension, shouldLog);
         }
       }
 
@@ -67,19 +87,23 @@ const traverseSassImportTree = async function (directory, filename, importList, 
     }
   } catch (e) {
     if (shouldLog) {
-      console.log(e);
+      if (e.code === 'ENOENT') {
+        console.warn(`Attempted file not found: ${filePath}`);
+      } else {
+        console.log(e);
+      }
     }
   }
 
   return importList;
 };
 
-const findUnusedFiles = async function (directory, filesInSassTree, exclusions) {
+const findUnusedFiles = async function (directory, filesInSassTree, exclusions, extension) {
   let unusedFiles = [];
   let filesInDirectory = await recursive(directory);
 
   filesInDirectory.forEach((file) => {
-    if (!checkIfExcluded(file, exclusions) && file.includes(fileExtension) && !filesInSassTree.includes(file)) {
+    if (!checkIfExcluded(file, exclusions) && file.includes(extension) && !filesInSassTree.includes(file)) {
       unusedFiles.push(file);
     }
   });
@@ -137,7 +161,7 @@ const deleteFiles = files => {
 
 const sassShake = async function (options) {
   let {
-    path,
+    path: rootPath,
     entryPoints,
     exclude,
     verbose: shouldLog,
@@ -145,9 +169,12 @@ const sassShake = async function (options) {
     hideTable: shouldHideTable
   } = options;
 
+  // Detect dominant extension
+  const detectedFileExtension = detectDominantExtension(rootPath);
+
   // Entry points
   if (!entryPoints) {
-    entryPoints = findEntryPoints(path);
+    entryPoints = findEntryPoints(rootPath, detectedFileExtension);
   }
 
   if (entryPoints.length) {
@@ -158,7 +185,7 @@ const sassShake = async function (options) {
     let filesInSassTree = [];
 
     for (let entryPoint of entryPoints) {
-      filesInSassTree = [...filesInSassTree, ...(await traverseSassImportTree(path, entryPoint, null, shouldLog))];
+      filesInSassTree = [...filesInSassTree, ...(await traverseSassImportTree(rootPath, entryPoint, null, detectedFileExtension, shouldLog))];
     }
 
     filesInSassTree = unique(filesInSassTree);
@@ -166,14 +193,13 @@ const sassShake = async function (options) {
 
 
     // Deletion candidates
-    let deletionCandidates = await findUnusedFiles(path, filesInSassTree, exclude);
+    let deletionCandidates = await findUnusedFiles(rootPath, filesInSassTree, exclude, detectedFileExtension);
 
     if (!shouldHideTable) {
       displayFiles(deletionCandidates);
     }
 
-    console.log(`Found ${deletionCandidates.length} unused files in directory tree ${path}`);
-
+    console.log(`Found ${deletionCandidates.length} unused files in directory tree ${rootPath}`);
 
     // Deletion
     if (shouldDeleteFiles) {

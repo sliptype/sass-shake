@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A command line utility to remove unused sass files",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node bin/sass-shake.js --path test/scss && node bin/sass-shake.js --path test/sass"
   },
   "repository": {
     "type": "git",
@@ -27,5 +27,10 @@
   "bin": {
     "sass-shake": "./bin/sass-shake.js"
   },
-  "preferGlobal": true
+  "preferGlobal": true,
+  "devDependencies": {
+    "babel-eslint": "^8.2.3",
+    "eslint": "^4.19.1",
+    "eslint-plugin-standard": "^3.1.0"
+  }
 }
