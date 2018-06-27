@@ -9,6 +9,7 @@ const possibleFilenames = (filename, extension) => [
   filename,
   `${filename}${extension}`,
   `_${filename}${extension}`
+  
 ];
 
 const unique = (array) => array.sort().filter((el, i, arr) => arr.indexOf(el) === i);
