@@ -7,7 +7,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sklingler93/sass-shake.git"
+    "url": "git+https://github.com/sliptype/sass-shake.git"
   },
   "keywords": [
     "sass",
@@ -16,9 +16,9 @@
   "author": "Sebastian Klingler",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/sklingler93/sass-shake/issues"
+    "url": "https://github.com/sliptype/sass-shake/issues"
   },
-  "homepage": "https://github.com/sklingler93/sass-shake#readme",
+  "homepage": "https://github.com/sliptype/sass-shake#readme",
   "dependencies": {
     "commander": "^2.15.1",
     "recursive-readdir": "^2.2.2",
