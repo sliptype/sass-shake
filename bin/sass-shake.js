@@ -7,7 +7,7 @@ const list = (val) => val.split(',');
 
 program
   .version('1.0.0')
-  .option('-p, --path <path>', 'Path to shake, current working directory by default')
+  .option('-p, --path <path>', 'Path to shake relative to the current working directory. Current working directory by default')
   .option('-f, --entryPoints <entryPoints>', 'Sass entry point files', list)
   .option('-e, --exclude <exclusions>', 'An array of regexp pattern strings that are matched against files to exclude them from the unused files list', list, [])
   .option('-v, --verbose', 'Show all errors')
@@ -20,4 +20,4 @@ const options = {
   path: program.path || process.cwd()
 };
 
-sassShake(options);
+sassShake.shake(options);
