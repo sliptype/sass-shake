@@ -1,9 +1,9 @@
 {
   "name": "sass-shake",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A command line utility to remove unused sass files",
   "scripts": {
-    "test": "node bin/sass-shake.js --path test/scss && node bin/sass-shake.js --path test/sass"
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,7 @@
   "homepage": "https://github.com/sliptype/sass-shake#readme",
   "dependencies": {
     "commander": "^2.15.1",
+    "node-sass": "^4.9.2",
     "recursive-readdir": "^2.2.2",
     "table": "^4.0.3"
   },
@@ -31,6 +32,10 @@
   "devDependencies": {
     "babel-eslint": "^8.2.3",
     "eslint": "^4.19.1",
-    "eslint-plugin-standard": "^3.1.0"
+    "eslint-plugin-standard": "^3.1.0",
+    "jest": "^23.4.2"
+  },
+  "jest": {
+    "testEnvironment": "node"
   }
 }
