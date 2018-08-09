@@ -1,43 +1,119 @@
 const fs = require('fs');
-const recursive = require('recursive-readdir');
 const path = require('path');
+const recursive = require('recursive-readdir');
+const sass = require('node-sass');
 const table = require('table').table;
 const util = require('util');
-const sass = require('node-sass');
 
 const validExtensions = ['.scss', '.sass'];
 
+/**
+ * Determine if a file has a valid extension
+ * @param { String } file
+ * @returns { Boolean } does the file have a valid extension
+ */
+const isSassFile = (file) => validExtensions
+  .some((extension) => file.includes(extension));
+
+/**
+ * Transform a directory into a list of sass entry points
+ * @param { String } directory
+ * @returns { Array } list of entry points
+ */
 const findEntryPoints = (directory) =>
   fs
   .readdirSync(directory)
-  .filter((filename) =>
-    validExtensions
-    .some((extension) => filename.includes(extension)))
+  .filter(isSassFile)
   .map((entryPoint) => path.join(directory, entryPoint));
 
+/**
+ * Gather a list of dependencies from a single sass tree
+ * @param { String } file
+ * @returns { Array } dependencies
+ */
+async function getDependencies(file) {
+  const result = await util.promisify(sass.render)({ file });
+  return result.stats.includedFiles;
+};
 
-const checkIfExcluded = (file, exclusions) => exclusions.some((exclusion) => {
+/**
+ * Transform a list of entry points into a list of all dependencies
+ * @param { Array } entryPoints
+ * @returns { Array } dependencies
+ */
+async function reduceEntryPointsToDependencies(entryPoints) {
+  return await entryPoints.reduce(async function (allDeps, entry) {
+    const resolvedDeps = await allDeps.then();
+    const newDeps = await getDependencies(entry);
+    return Promise.resolve([
+      ...resolvedDeps,
+      ...newDeps
+    ]);
+  }, Promise.resolve([]));
+}
+
+/**
+ * Determine if a file is excluded via regex
+ * @param { String } file
+ * @param { Array } exclusions
+ * @returns { Boolean } is the file excluded
+ */
+const isExcluded = (file, exclusions) =>
+  exclusions.some((exclusion) => {
     const exclusionRegex = new RegExp(exclusion.slice(1, exclusion.length - 1));
     return exclusionRegex.test(file);
   });
 
-const findUnusedFiles = async function (directory, filesInSassTree, exclusions) {
+/**
+ * Determine if a file is unused by sass
+ * @param { String } file
+ * @param { Array } filesInSassTree
+ * @param { Array } exclusions
+ * @returns { Boolean } is the file unused
+ */
+const isUnused = (file, filesInSassTree, exclusions) =>
+  isSassFile(file)
+  && !isExcluded(file, exclusions)
+  && !filesInSassTree.includes(file);
 
+/**
+ * Compare directory contents with a list of files that are in use
+ * @param { String } directory
+ * @param { Array } filesInSassTree
+ * @param { Array } exclusions
+ * @returns { Array } files that are unused
+ */
+const findUnusedFiles = async function (directory, filesInSassTree, exclusions) {
   const filesInDirectory = (await recursive(directory));
 
   const unusedFiles = filesInDirectory
-    .filter((file) => !checkIfExcluded(file, exclusions) && !filesInSassTree.includes(file));
+    .filter((file) => isUnused(file, filesInSassTree, exclusions));
 
   return unusedFiles;
 };
 
+/**
+ * Delete an array of files
+ * @param { Array } files
+ * @returns { Number } number of files deleted
+ */
+const deleteFiles = (files) => files.map(fs.unlinkSync).length;
+
+/**
+ * Log a list of sass entry points
+ * @param { Array } entryPoints
+ */
 const displayEntryPoints = (entryPoints) => {
   console.log('\nTraversing entry points:\n');
   entryPoints.forEach((entryPoint) => console.log(`    ${entryPoint}`));
   console.log('\n');
 };
 
-const displayFiles = files => {
+/**
+ * Log a pretty table of files
+ * @param { Array } files
+ */
+const displayFiles = (files) => {
   const tableConfig = {
     columns: {
       0: {
@@ -51,55 +127,27 @@ const displayFiles = files => {
     }
   };
 
-  let totalFileSize = 0;
-
   const fileData = files.map((file) => {
-    let stats = fs.statSync(file);
-    let fileSize = stats.size / 1000;
-    totalFileSize += fileSize;
+    const stats = fs.statSync(file);
+    const fileSize = stats.size / 1000;
     return [file, fileSize];
   });
 
-  let tableData = [['File', 'Size (kb)']];
-  tableData = tableData.concat(fileData);
+  const totalFileSize = fileData.reduce((total, [,size]) => total + size, 0);
 
-  tableData.push(['Total file size', totalFileSize.toFixed(2)]);
+  const tableData = [['File', 'Size (kb)']]
+        .concat(fileData, [['Total file size', totalFileSize.toFixed(2)]]);
 
   const output = table(tableData, tableConfig);
   console.log(output);
 };
 
-const deleteFiles = files => {
-  let deleteCounter = 0;
-  for (let file of files) {
-    fs.unlinkSync(file);
-    deleteCounter++;
-  }
-
-  console.log(`Deleted ${deleteCounter} unused files in directory`);
-};
 
 /**
- * Returns an array of files included as dependencies in a sass tree
- * @param { String } file
- * @returns { Array }
+ * Shake a sass directory given options (see README)
+ * @param { Object } options
+ * @returns { Array } unused files
  */
-async function findIncludedFiles(file) {
-  const result = await util.promisify(sass.render)({ file });
-  return result.stats.includedFiles;
-};
-
-async function reduceEntryPointsToDependencies(entryPoints) {
-  return await entryPoints.reduce(async function (files, entry) {
-    const resolvedFiles = await files.then();
-    const newEntries = await findIncludedFiles(entry);
-    return Promise.resolve([
-      ...resolvedFiles,
-      ...newEntries
-    ]);
-  }, Promise.resolve([]));
-}
-
 const shake = async function (options) {
 
   // Get absolute path for directory to shake
@@ -108,38 +156,26 @@ const shake = async function (options) {
   const {
     entryPoints = findEntryPoints(root),
     exclude = [],
-    verbose: shouldLog,
-    deleteFiles: shouldDeleteFiles,
-    hideTable: shouldHideTable
+    silent = false,
+    hideTable = false,
+    delete: shouldDeleteFiles = false,
   } = options;
 
   if (entryPoints.length) {
 
-    displayEntryPoints(entryPoints);
+    silent || displayEntryPoints(entryPoints);
 
-    // Used Sass Files
     const filesInSassTree = await reduceEntryPointsToDependencies(entryPoints);
+    silent || console.log(`Found ${filesInSassTree.length} files in Sass tree\n`);
 
-    console.log(`Found ${filesInSassTree.length} files in Sass tree\n`);
-
-    // Deletion candidates
     const deletionCandidates = await findUnusedFiles(root, filesInSassTree, exclude);
+    silent || hideTable || displayFiles(deletionCandidates);
+    silent || console.log(`Found ${deletionCandidates.length} unused files in directory tree ${root}`);
 
-    if (!shouldHideTable) {
-      displayFiles(deletionCandidates);
-    }
-
-    console.log(`Found ${deletionCandidates.length} unused files in directory tree ${root}`);
-
-    // Deletion
-    if (shouldDeleteFiles) {
-      deleteFiles(deletionCandidates);
-    }
-
+    shouldDeleteFiles && console.log(`Deleted ${deleteFiles(deletionCandidates)} unused files in directory`);
     return deletionCandidates;
-
   } else {
-    console.log('No entrypoints found (to explicitly specify them, use the --entryPoints flag)');
+    silent || console.log('No entrypoints found (to explicitly specify them, use the --entryPoints flag)');
   }
 };
 
