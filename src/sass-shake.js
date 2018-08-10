@@ -31,8 +31,8 @@ const findEntryPoints = (directory) =>
  * @param { String } file
  * @returns { Array } dependencies
  */
-async function getDependencies(file) {
-  const result = await util.promisify(sass.render)({ file });
+async function getDependencies(includePaths, file) {
+  const result = await util.promisify(sass.render)({ includePaths, file });
   return result.stats.includedFiles;
 };
 
@@ -41,10 +41,10 @@ async function getDependencies(file) {
  * @param { Array } entryPoints
  * @returns { Array } dependencies
  */
-async function reduceEntryPointsToDependencies(entryPoints) {
+async function reduceEntryPointsToDependencies(includePaths, entryPoints) {
   return await entryPoints.reduce(async function (allDeps, entry) {
     const resolvedDeps = await allDeps.then();
-    const newDeps = await getDependencies(entry);
+    const newDeps = await getDependencies(includePaths, entry);
     return Promise.resolve([
       ...resolvedDeps,
       ...newDeps
@@ -114,6 +114,10 @@ const displayEntryPoints = (entryPoints) => {
  * @param { Array } files
  */
 const displayFiles = (files) => {
+  if (!files.length) {
+    return;
+  }
+
   const tableConfig = {
     columns: {
       0: {
@@ -165,7 +169,7 @@ const shake = async function (options) {
 
     silent || displayEntryPoints(entryPoints);
 
-    const filesInSassTree = await reduceEntryPointsToDependencies(entryPoints);
+    const filesInSassTree = await reduceEntryPointsToDependencies([root], entryPoints);
     silent || console.log(`Found ${filesInSassTree.length} files in Sass tree\n`);
 
     const deletionCandidates = await findUnusedFiles(root, filesInSassTree, exclude);
