@@ -1,4 +1,5 @@
 # sass-shake
+[![npm](https://img.shields.io/npm/v/sass-shake.svg)](https://www.npmjs.com/package/sass-shake)
 A command line utility to remove unused sass files
 
 ## Description
