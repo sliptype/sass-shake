@@ -8,6 +8,12 @@ const util = require('util');
 const validExtensions = ['.scss', '.sass'];
 
 /**
+ * Remove duplicate values from an array
+ * @param { Array } array
+ */
+const unique = (array) => Array.from(new Set(array));
+
+/**
  * Determine if a file has a valid extension
  * @param { String } file
  * @returns { Boolean } does the file have a valid extension
@@ -170,9 +176,10 @@ const shake = async function (options) {
     silent || displayEntryPoints(entryPoints);
 
     const filesInSassTree = await reduceEntryPointsToDependencies([root], entryPoints);
-    silent || console.log(`Found ${filesInSassTree.length} files in Sass tree\n`);
+		const uniqueFilesInSassTree = unique(filesInSassTree);
+    silent || console.log(`Found ${uniqueFilesInSassTree.length} files in Sass tree\n`);
 
-    const deletionCandidates = await findUnusedFiles(root, filesInSassTree, exclude);
+    const deletionCandidates = await findUnusedFiles(root, uniqueFilesInSassTree, exclude);
     silent || hideTable || displayFiles(deletionCandidates);
     silent || console.log(`Found ${deletionCandidates.length} unused files in directory tree ${root}`);
 
