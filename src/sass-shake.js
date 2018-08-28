@@ -77,10 +77,13 @@ const isExcluded = (file, exclusions) =>
  * @param { Array } exclusions
  * @returns { Boolean } is the file unused
  */
-const isUnused = (file, filesInSassTree, exclusions) =>
-  isSassFile(file)
+const isUnused = (file, filesInSassTree, exclusions) => {
+  file = file.split('\\').join('/');
+	
+  return isSassFile(file)
   && !isExcluded(file, exclusions)
   && !filesInSassTree.includes(file);
+}
 
 /**
  * Compare directory contents with a list of files that are in use
