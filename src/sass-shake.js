@@ -39,7 +39,7 @@ const findEntryPoints = (directory) =>
  */
 async function getDependencies(includePaths, file) {
   const result = await util.promisify(sass.render)({ includePaths, file });
-  return result.stats.includedFiles;
+  return result.stats.includedFiles.map(path.normalize);
 };
 
 /**
@@ -77,13 +77,9 @@ const isExcluded = (file, exclusions) =>
  * @param { Array } exclusions
  * @returns { Boolean } is the file unused
  */
-const isUnused = (file, filesInSassTree, exclusions) => {
-  file = file.split('\\').join('/');
-	
-  return isSassFile(file)
+const isUnused = (file, filesInSassTree, exclusions) => isSassFile(file)
   && !isExcluded(file, exclusions)
   && !filesInSassTree.includes(file);
-}
 
 /**
  * Compare directory contents with a list of files that are in use
